@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RawSqlMcp.Cli/RawSqlMcp.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RawSqlMcp.Cli.Tests.Unit/RawSqlMcp.Cli.Tests.Unit.csproj" />
+  </Folder>
+</Solution>

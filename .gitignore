@@ -1,0 +1,11 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+artifacts/
+.nuke/temp/
+.tmp/
+build/bin/
+build/obj/
+.idea/*
