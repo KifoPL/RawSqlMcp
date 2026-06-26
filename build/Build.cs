@@ -51,6 +51,7 @@ class Build : NukeBuild
     const string NuGetSource = "https://api.nuget.org/v3/index.json";
     const string McpPublisherUrl = "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz";
     const string VersionPlaceholder = "0.0.0-placeholder";
+    const int McpRegistryDescriptionMaxLength = 100;
 
     static readonly string[] RequiredServerProperties = ["name", "description", "version"];
     static readonly string[] RequiredPackageProperties = ["registryType", "identifier", "transport"];
@@ -74,6 +75,7 @@ class Build : NukeBuild
 
     [Parameter, Secret] readonly string? CodecovToken;
     [Parameter, Secret] readonly string? ReleaseTagToken;
+    [Parameter] readonly string? CommitMessageFile;
 
     GitHubActions? GitHubActions => GitHubActions.Instance;
 
@@ -130,6 +132,7 @@ class Build : NukeBuild
             JsonElement root = document.RootElement;
 
             RequireProperties(root, RequiredServerProperties, "server.json");
+            RequireDescriptionsWithinLimit(root, "server.json");
 
             string name = GetRequiredString(root, "name", "server.json");
             Require(name == ServerName, $"server.json name must be '{ServerName}'. Actual: {name}");
@@ -297,6 +300,29 @@ class Build : NukeBuild
                                     """);
             ChmodExecutable(hook);
             Log.Information("Installed pre-commit hook at {Hook}", hook);
+
+            AbsolutePath commitMessageHook = RootDirectory / ".git/hooks/commit-msg";
+            File.WriteAllText(commitMessageHook, """
+                                                 #!/usr/bin/env bash
+                                                 set -euo pipefail
+
+                                                 ./build.sh ValidateCommitMessage --commit-message-file "$1"
+                                                 """);
+            ChmodExecutable(commitMessageHook);
+            Log.Information("Installed commit-msg hook at {Hook}", commitMessageHook);
+        });
+
+    Target ValidateCommitMessage => _ => _
+       .Executes(() =>
+        {
+            string commitMessageFile = CommitMessageFile ?? string.Empty;
+            Require(!string.IsNullOrWhiteSpace(commitMessageFile), "--commit-message-file is required.");
+            Require(File.Exists(commitMessageFile), $"Commit message file does not exist: {commitMessageFile}");
+
+            string message = File.ReadAllText(commitMessageFile);
+            string? error = CommitMessageLengthGate.GetValidationError(message);
+            if (error != null)
+                Fail(error);
         });
 
     Target Release => _ => _
@@ -522,6 +548,34 @@ class Build : NukeBuild
         string? text = value.GetString();
         Require(!string.IsNullOrWhiteSpace(text), $"{context}.{property} must not be empty.");
         return text!;
+    }
+
+    static void RequireDescriptionsWithinLimit(JsonElement element, string context)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty property in element.EnumerateObject())
+            {
+                string propertyContext = $"{context}.{property.Name}";
+                if (property.NameEquals("description"))
+                {
+                    string description = property.Value.GetString() ?? string.Empty;
+                    Require(description.Length <= McpRegistryDescriptionMaxLength,
+                            $"{propertyContext} must be {McpRegistryDescriptionMaxLength} characters or fewer. Actual length: {description.Length}.");
+                }
+
+                RequireDescriptionsWithinLimit(property.Value, propertyContext);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            int index = 0;
+            foreach (JsonElement child in element.EnumerateArray())
+            {
+                RequireDescriptionsWithinLimit(child, $"{context}[{index}]");
+                index++;
+            }
+        }
     }
 
     static void RequireTool(string executable, string message)

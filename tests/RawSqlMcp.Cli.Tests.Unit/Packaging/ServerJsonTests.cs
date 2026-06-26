@@ -41,6 +41,18 @@ public class ServerJsonTests
     }
 
     [Test]
+    public async Task ServerJson_DescriptionsDoNotExceedRegistryLimit()
+    {
+        using JsonDocument document = await LoadServerJsonAsync();
+
+        IReadOnlyList<string> descriptions = EnumerateDescriptions(document.RootElement)
+            .ToArray();
+
+        descriptions.ShouldNotBeEmpty();
+        descriptions.ShouldAllBe(description => description.Length <= 100);
+    }
+
+    [Test]
     public async Task ServerJson_DeclaresNuGetPackageWithSchemaCorrectEnvironmentVariables()
     {
         using JsonDocument document = await LoadServerJsonAsync();
@@ -110,5 +122,28 @@ public class ServerJsonTests
                                                     "../../../../../src/RawSqlMcp.Cli/.mcp/server.json"));
         await using FileStream stream = File.OpenRead(path);
         return await JsonDocument.ParseAsync(stream);
+    }
+
+    private static IEnumerable<string> EnumerateDescriptions(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty property in element.EnumerateObject())
+            {
+                if (property.NameEquals("description"))
+                    yield return property.Value.GetString() ?? string.Empty;
+
+                foreach (string description in EnumerateDescriptions(property.Value))
+                    yield return description;
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement child in element.EnumerateArray())
+            {
+                foreach (string description in EnumerateDescriptions(child))
+                    yield return description;
+            }
+        }
     }
 }
