@@ -1,4 +1,4 @@
-using RawSqlMcp.Build;
+using _build;
 using Shouldly;
 
 namespace RawSqlMcp.Cli.Tests.Unit.Packaging;

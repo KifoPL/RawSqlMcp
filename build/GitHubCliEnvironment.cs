@@ -1,6 +1,6 @@
 using System.Collections;
 
-namespace RawSqlMcp.Build;
+namespace _build;
 
 public static class GitHubCliEnvironment
 {
