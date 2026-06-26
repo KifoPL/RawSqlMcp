@@ -19,7 +19,7 @@ public class ServerJsonTests
 
         root.GetProperty("name")
             .GetString()
-            .ShouldBe("io.github.kifopl/RawSqlMcp");
+            .ShouldBe("io.github.KifoPL/RawSqlMcp");
 
         root.GetProperty("title")
             .GetString()
@@ -33,6 +33,11 @@ public class ServerJsonTests
         root.GetProperty("version")
             .GetString()
             .ShouldBe(VersionPlaceholder);
+
+        root.GetProperty("repository")
+            .GetProperty("url")
+            .GetString()
+            .ShouldBe("https://github.com/KifoPL/RawSqlMcp");
     }
 
     [Test]
