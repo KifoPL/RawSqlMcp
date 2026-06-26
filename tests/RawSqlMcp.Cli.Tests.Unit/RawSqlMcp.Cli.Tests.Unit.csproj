@@ -15,6 +15,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\RawSqlMcp.Cli\RawSqlMcp.Cli.csproj" />
+      <Compile Include="..\..\build\ReleaseVersionPlanner.cs" Link="Build\ReleaseVersionPlanner.cs" />
     </ItemGroup>
 
 </Project>

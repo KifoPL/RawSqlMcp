@@ -28,11 +28,13 @@
         "CI",
         "Clean",
         "Coverage",
+        "CreateVersionTag",
         "Format",
         "GenerateVhs",
         "InspectPackage",
         "InstallGitHooks",
         "Pack",
+        "Pipeline",
         "PreCommit",
         "Release",
         "Restore",
@@ -113,6 +115,10 @@
     {
       "properties": {
         "CodecovToken": {
+          "type": "string",
+          "default": "Secrets must be entered via 'nuke :secrets [profile]'"
+        },
+        "ReleaseTagToken": {
           "type": "string",
           "default": "Secrets must be entered via 'nuke :secrets [profile]'"
         }
