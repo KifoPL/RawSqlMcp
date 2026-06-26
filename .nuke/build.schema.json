@@ -33,6 +33,7 @@
         "GenerateVhs",
         "InspectPackage",
         "InstallGitHooks",
+        "IntegrationTests",
         "Pack",
         "Pipeline",
         "PreCommit",

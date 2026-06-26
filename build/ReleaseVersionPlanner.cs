@@ -1,12 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace RawSqlMcp.Build;
-
-public sealed record ReleaseVersionPlan(
-    bool ShouldCreateTag,
-    string? Version,
-    string? Tag,
-    string Reason);
+namespace _build;
 
 public static class ReleaseVersionPlanner
 {

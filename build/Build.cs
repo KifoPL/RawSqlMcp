@@ -4,13 +4,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Nuke.Common;
-using Nuke.Common.CI;
 using Nuke.Common.CI.GitHubActions;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
-using RawSqlMcp.Build;
 using Serilog;
 using static Nuke.Common.Tooling.ProcessTasks;
+
+namespace _build;
 
 [GitHubActions(
     "ci",
@@ -59,6 +59,7 @@ class Build : NukeBuild
     AbsolutePath SolutionFile => RootDirectory / "RawSqlMcp.slnx";
     AbsolutePath CliProject => RootDirectory / "src/RawSqlMcp.Cli/RawSqlMcp.Cli.csproj";
     AbsolutePath UnitTestProject => RootDirectory / "tests/RawSqlMcp.Cli.Tests.Unit/RawSqlMcp.Cli.Tests.Unit.csproj";
+    AbsolutePath IntegrationTestProject => RootDirectory / "tests/RawSqlMcp.Cli.Tests.Integration/RawSqlMcp.Cli.Tests.Integration.csproj";
     AbsolutePath ServerJsonFile => RootDirectory / "src/RawSqlMcp.Cli/.mcp/server.json";
     AbsolutePath ReadmeFile => RootDirectory / "README.md";
     AbsolutePath ArtifactsDirectory => RootDirectory / "artifacts";
@@ -79,47 +80,51 @@ class Build : NukeBuild
     public static int Main() => Execute<Build>(x => x.CI);
 
     Target Clean => _ => _
-        .Executes(() =>
+       .Executes(() =>
         {
             RecreateDirectory(ArtifactsDirectory);
         });
 
     Target Restore => _ => _
-        .Executes(() => DotNet("restore RawSqlMcp.slnx"));
+       .Executes(() => DotNet("restore RawSqlMcp.slnx"));
 
     Target Format => _ => _
-        .DependsOn(Restore)
-        .Executes(() => DotNet("format RawSqlMcp.slnx"));
+                         .DependsOn(Restore)
+                         .Executes(() => DotNet("format RawSqlMcp.slnx"));
 
     Target BuildSolution => _ => _
-        .DependsOn(Restore)
-        .Executes(() => DotNet($"build RawSqlMcp.slnx --configuration {Configuration} --no-restore"));
+                                .DependsOn(Restore)
+                                .Executes(() => DotNet($"build RawSqlMcp.slnx --configuration {Configuration} --no-restore"));
 
     Target UnitTests => _ => _
-        .DependsOn(BuildSolution)
-        .Executes(() => DotNet($"test --project {UnitTestProject} --configuration {Configuration} --no-build"));
+                            .DependsOn(BuildSolution)
+                            .Executes(() => DotNet($"test --project {UnitTestProject} --configuration {Configuration} --no-build"));
+
+    Target IntegrationTests => _ => _
+                                   .DependsOn(BuildSolution)
+                                   .Executes(() => DotNet($"test --project {IntegrationTestProject} --configuration {Configuration} --no-build"));
 
     Target Coverage => _ => _
-        .DependsOn(BuildSolution)
-        .Produces(CoverageFile)
-        .Executes(() =>
-        {
-            RecreateDirectory(CoverageDirectory);
-            DotNet($"test --solution {SolutionFile} --configuration {Configuration} --no-build -- --coverage --coverage-output {CoverageFile} --coverage-output-format cobertura");
-            Require(File.Exists(CoverageFile), $"Coverage file was not created: {CoverageFile}");
-        });
+                           .DependsOn(BuildSolution)
+                           .Produces(CoverageFile)
+                           .Executes(() =>
+                            {
+                                RecreateDirectory(CoverageDirectory);
+                                DotNet($"test --project {UnitTestProject} --configuration {Configuration} --no-build -- --coverage --coverage-output {CoverageFile} --coverage-output-format cobertura");
+                                Require(File.Exists(CoverageFile), $"Coverage file was not created: {CoverageFile}");
+                            });
 
     Target Pack => _ => _
-        .DependsOn(BuildSolution, ValidateServerJson)
-        .Produces(PackagesDirectory / "*.nupkg")
-        .Executes(() =>
-        {
-            RecreateDirectory(PackagesDirectory);
-            DotNet($"pack {CliProject} --configuration {Configuration} --no-build --output {PackagesDirectory}");
-        });
+                       .DependsOn(BuildSolution, ValidateServerJson)
+                       .Produces(PackagesDirectory / "*.nupkg")
+                       .Executes(() =>
+                        {
+                            RecreateDirectory(PackagesDirectory);
+                            DotNet($"pack {CliProject} --configuration {Configuration} --no-build --output {PackagesDirectory}");
+                        });
 
     Target ValidateServerJson => _ => _
-        .Executes(() =>
+       .Executes(() =>
         {
             using JsonDocument document = JsonDocument.Parse(File.ReadAllText(ServerJsonFile));
             JsonElement root = document.RootElement;
@@ -129,14 +134,14 @@ class Build : NukeBuild
             string name = GetRequiredString(root, "name", "server.json");
             Require(name == ServerName, $"server.json name must be '{ServerName}'. Actual: {name}");
             Require(File.ReadAllText(ReadmeFile).Contains($"mcp-name: {name}", StringComparison.Ordinal),
-                $"README.md must contain the MCP Registry ownership marker 'mcp-name: {name}'.");
+                    $"README.md must contain the MCP Registry ownership marker 'mcp-name: {name}'.");
 
             string schema = GetRequiredString(root, "$schema", "server.json");
             Require(Uri.TryCreate(schema, UriKind.Absolute, out Uri? _), "$schema must be an absolute URI.");
 
             string version = GetRequiredString(root, "version", "server.json");
             Require(version == VersionPlaceholder || IsSemanticVersion(version),
-                $"server.json version must be '{VersionPlaceholder}' or semantic version. Actual: {version}");
+                    $"server.json version must be '{VersionPlaceholder}' or semantic version. Actual: {version}");
 
             if (root.TryGetProperty("repository", out JsonElement repository))
                 RequireProperties(repository, RequiredRepositoryProperties, "server.json.repository");
@@ -163,101 +168,101 @@ class Build : NukeBuild
         });
 
     Target InspectPackage => _ => _
-        .DependsOn(Pack)
-        .Executes(() =>
-        {
-            AbsolutePath package = GetSinglePackage();
-            string version = GetPackageVersion(package);
-            using ZipArchive archive = ZipFile.OpenRead(package);
-            ZipArchiveEntry? entry = archive.GetEntry(".mcp/server.json");
-            Require(entry != null, "Package does not contain .mcp/server.json.");
-            ZipArchiveEntry? readmeEntry = archive.GetEntry("README.md");
-            Require(readmeEntry != null, "Package does not contain README.md.");
-            Require(archive.GetEntry("LICENSE") != null, "Package does not contain LICENSE.");
+                                 .DependsOn(Pack)
+                                 .Executes(() =>
+                                  {
+                                      AbsolutePath package = GetSinglePackage();
+                                      string version = GetPackageVersion(package);
+                                      using ZipArchive archive = ZipFile.OpenRead(package);
+                                      ZipArchiveEntry? entry = archive.GetEntry(".mcp/server.json");
+                                      Require(entry != null, "Package does not contain .mcp/server.json.");
+                                      ZipArchiveEntry? readmeEntry = archive.GetEntry("README.md");
+                                      Require(readmeEntry != null, "Package does not contain README.md.");
+                                      Require(archive.GetEntry("LICENSE") != null, "Package does not contain LICENSE.");
 
-            using Stream stream = entry!.Open();
-            using JsonDocument document = JsonDocument.Parse(stream);
-            JsonElement root = document.RootElement;
+                                      using Stream stream = entry!.Open();
+                                      using JsonDocument document = JsonDocument.Parse(stream);
+                                      JsonElement root = document.RootElement;
 
-            string name = GetRequiredString(root, "name", ".mcp/server.json");
-            using Stream readmeStream = readmeEntry!.Open();
-            using StreamReader readmeReader = new(readmeStream);
-            Require(readmeReader.ReadToEnd().Contains($"mcp-name: {name}", StringComparison.Ordinal),
-                $"Packaged README.md must contain the MCP Registry ownership marker 'mcp-name: {name}'.");
+                                      string name = GetRequiredString(root, "name", ".mcp/server.json");
+                                      using Stream readmeStream = readmeEntry!.Open();
+                                      using StreamReader readmeReader = new(readmeStream);
+                                      Require(readmeReader.ReadToEnd().Contains($"mcp-name: {name}", StringComparison.Ordinal),
+                                              $"Packaged README.md must contain the MCP Registry ownership marker 'mcp-name: {name}'.");
 
-            GetRequiredString(root, "version", ".mcp/server.json").ShouldEqual(version, "Top-level server version must match package version.");
-            JsonElement packageElement = root.GetProperty("packages")[0];
-            GetRequiredString(packageElement, "version", ".mcp/server.json packages[0]").ShouldEqual(version, "Package server version must match package version.");
-        });
+                                      GetRequiredString(root, "version", ".mcp/server.json").ShouldEqual(version, "Top-level server version must match package version.");
+                                      JsonElement packageElement = root.GetProperty("packages")[0];
+                                      GetRequiredString(packageElement, "version", ".mcp/server.json packages[0]").ShouldEqual(version, "Package server version must match package version.");
+                                  });
 
     Target UploadCoverage => _ => _
-        .DependsOn(Coverage)
-        .OnlyWhenDynamic(() => GitHubActions != null && GitHubActions.Ref == "refs/heads/master")
-        .Executes(() =>
-        {
-            if (string.IsNullOrWhiteSpace(CodecovToken))
-            {
-                Log.Warning("CODECOV_TOKEN is not available; skipping non-blocking Codecov upload.");
-                return;
-            }
+                                 .DependsOn(Coverage)
+                                 .OnlyWhenDynamic(() => GitHubActions != null && GitHubActions.Ref == "refs/heads/master")
+                                 .Executes(() =>
+                                  {
+                                      if (string.IsNullOrWhiteSpace(CodecovToken))
+                                      {
+                                          Log.Warning("CODECOV_TOKEN is not available; skipping non-blocking Codecov upload.");
+                                          return;
+                                      }
 
-            try
-            {
-                AbsolutePath uploader = ArtifactsDirectory / "codecov";
-                DownloadFile("https://uploader.codecov.io/latest/linux/codecov", uploader);
-                ChmodExecutable(uploader);
-                RunProcess(uploader, $"--verbose upload-process --disable-search -t {CodecovToken} -f {CoverageFile}");
-            }
-            catch (Exception exception)
-            {
-                Log.Warning(exception, "Codecov upload failed and is non-blocking by design.");
-            }
-        });
+                                      try
+                                      {
+                                          AbsolutePath uploader = ArtifactsDirectory / "codecov";
+                                          DownloadFile("https://uploader.codecov.io/latest/linux/codecov", uploader);
+                                          ChmodExecutable(uploader);
+                                          RunProcess(uploader, $"--verbose upload-process --disable-search -t {CodecovToken} -f {CoverageFile}");
+                                      }
+                                      catch (Exception exception)
+                                      {
+                                          Log.Warning(exception, "Codecov upload failed and is non-blocking by design.");
+                                      }
+                                  });
 
     Target CI => _ => _
-        .DependsOn(ValidateServerJson, UnitTests, Coverage, InspectPackage, UploadCoverage);
+       .DependsOn(ValidateServerJson, UnitTests, IntegrationTests, Coverage, InspectPackage, UploadCoverage);
 
     Target Pipeline => _ => _
-        .DependsOn(CI, CreateVersionTag);
+       .DependsOn(CI, CreateVersionTag);
 
     Target CreateVersionTag => _ => _
-        .DependsOn(CI)
-        .OnlyWhenDynamic(IsMasterPush)
-        .Executes(() =>
-        {
-            // Merge commits can override the default patch bump with [release: major|minor|patch|skip|x.y.z[-pre]].
-            RunProcess("git", "fetch origin --tags");
+                                   .DependsOn(CI)
+                                   .OnlyWhenDynamic(IsMasterPush)
+                                   .Executes(() =>
+                                    {
+                                        // Merge commits can override the default patch bump with [release: major|minor|patch|skip|x.y.z[-pre]].
+                                        RunProcess("git", "fetch origin --tags");
 
-            string tags = RunProcessWithOutput("git", "tag --list v*");
-            string message = RunProcessWithOutput("git", "log -1 --pretty=%B");
-            ReleaseVersionPlan plan = ReleaseVersionPlanner.Plan(
-                tags.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-                message);
+                                        string tags = RunProcessWithOutput("git", "tag --list v*");
+                                        string message = RunProcessWithOutput("git", "log -1 --pretty=%B");
+                                        ReleaseVersionPlan plan = ReleaseVersionPlanner.Plan(
+                                            tags.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                                            message);
 
-            if (!plan.ShouldCreateTag)
-            {
-                Log.Information("{Reason}", plan.Reason);
-                return;
-            }
+                                        if (!plan.ShouldCreateTag)
+                                        {
+                                            Log.Information("{Reason}", plan.Reason);
+                                            return;
+                                        }
 
-            Require(!string.IsNullOrWhiteSpace(plan.Tag), "Release version planner did not return a tag.");
-            Require(!string.IsNullOrWhiteSpace(plan.Version), "Release version planner did not return a version.");
-            Require(!string.IsNullOrWhiteSpace(ReleaseTagToken), "RELEASE_TAG_TOKEN is required to push tags that trigger the release workflow.");
+                                        Require(!string.IsNullOrWhiteSpace(plan.Tag), "Release version planner did not return a tag.");
+                                        Require(!string.IsNullOrWhiteSpace(plan.Version), "Release version planner did not return a version.");
+                                        Require(!string.IsNullOrWhiteSpace(ReleaseTagToken), "RELEASE_TAG_TOKEN is required to push tags that trigger the release workflow.");
 
-            RunProcess("git", "config user.name \"github-actions[bot]\"");
-            RunProcess("git", "config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"");
-            RunProcess("git", $"tag {Quote(plan.Tag!)} -m {Quote($"Release {plan.Version}")}");
-            ClearPersistedGitHubCheckoutCredentials();
-            RunProcess("git", $"-c http.https://github.com/.extraheader= push {Quote(GetAuthenticatedGitHubRemote())} {Quote(plan.Tag!)}");
-            Log.Information("Created release tag {Tag}; tag-triggered release workflow will publish package version {Version}.", plan.Tag, plan.Version);
-        });
+                                        RunProcess("git", "config user.name \"github-actions[bot]\"");
+                                        RunProcess("git", "config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"");
+                                        RunProcess("git", $"tag {Quote(plan.Tag!)} -m {Quote($"Release {plan.Version}")}");
+                                        ClearPersistedGitHubCheckoutCredentials();
+                                        RunProcess("git", $"-c http.https://github.com/.extraheader= push {Quote(GetAuthenticatedGitHubRemote())} {Quote(plan.Tag!)}");
+                                        Log.Information("Created release tag {Tag}; tag-triggered release workflow will publish package version {Version}.", plan.Tag, plan.Version);
+                                    });
 
     Target GenerateVhs => _ => _
-        .DependsOn(BuildSolution)
-        .Executes(GenerateVhsGif);
+                              .DependsOn(BuildSolution)
+                              .Executes(GenerateVhsGif);
 
     Target PreCommit => _ => _
-        .Executes(() =>
+       .Executes(() =>
         {
             string status = RunProcessWithOutput("git", "status --porcelain");
             bool generateVhs = PreCommitChangeDetector.HasChangedTapeFiles(status);
@@ -280,43 +285,43 @@ class Build : NukeBuild
         });
 
     Target InstallGitHooks => _ => _
-        .Executes(() =>
+       .Executes(() =>
         {
             AbsolutePath hook = RootDirectory / ".git/hooks/pre-commit";
             Directory.CreateDirectory(Path.GetDirectoryName(hook)!);
             File.WriteAllText(hook, """
-#!/usr/bin/env bash
-set -euo pipefail
+                                    #!/usr/bin/env bash
+                                    set -euo pipefail
 
-./build.sh PreCommit
-""");
+                                    ./build.sh PreCommit
+                                    """);
             ChmodExecutable(hook);
             Log.Information("Installed pre-commit hook at {Hook}", hook);
         });
 
     Target Release => _ => _
-        .DependsOn(ValidateServerJson, UnitTests, InspectPackage)
-        .Executes(async () =>
-        {
-            if (!IsPublishingRelease())
-            {
-                await RunReleaseDryRunAsync();
-                return;
-            }
+                          .DependsOn(ValidateServerJson, UnitTests, InspectPackage)
+                          .Executes(async () =>
+                           {
+                               if (!IsPublishingRelease())
+                               {
+                                   await RunReleaseDryRunAsync();
+                                   return;
+                               }
 
-            AbsolutePath package = GetSinglePackage();
-            string version = GetPackageVersion(package);
-            string tag = GitHubActions!.Ref["refs/tags/".Length..];
+                               AbsolutePath package = GetSinglePackage();
+                               string version = GetPackageVersion(package);
+                               string tag = GitHubActions!.Ref["refs/tags/".Length..];
 
-            Require(tag == $"v{version}", $"Tag '{tag}' must match package version '{version}'.");
-            EnsureTagIsReachableFromMaster();
+                               Require(tag == $"v{version}", $"Tag '{tag}' must match package version '{version}'.");
+                               EnsureTagIsReachableFromMaster();
 
-            string apiKey = await ExchangeNuGetOidcTokenAsync();
-            DotNet($"nuget push {package} --source {NuGetSource} --api-key {apiKey} --skip-duplicate");
+                               string apiKey = await ExchangeNuGetOidcTokenAsync();
+                               DotNet($"nuget push {package} --source {NuGetSource} --api-key {apiKey} --skip-duplicate");
 
-            PublishMcpRegistryWithRetry(package, version);
-            CreateGitHubRelease(tag, version);
-        });
+                               PublishMcpRegistryWithRetry(package, version);
+                               CreateGitHubRelease(tag, version);
+                           });
 
     async Task RunReleaseDryRunAsync()
     {
@@ -338,10 +343,10 @@ set -euo pipefail
     string GetAuthenticatedGitHubRemote()
     {
         string repository = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")
-            ?? RunProcessWithOutput("git", "config --get remote.origin.url")
-                .Replace("git@github.com:", string.Empty, StringComparison.Ordinal)
-                .Replace("https://github.com/", string.Empty, StringComparison.Ordinal)
-                .TrimEnd('/');
+                         ?? RunProcessWithOutput("git", "config --get remote.origin.url")
+                           .Replace("git@github.com:", string.Empty, StringComparison.Ordinal)
+                           .Replace("https://github.com/", string.Empty, StringComparison.Ordinal)
+                           .TrimEnd('/');
 
         return $"https://x-access-token:{ReleaseTagToken}@github.com/{repository}.git";
     }
@@ -378,7 +383,7 @@ set -euo pipefail
         tokenResponse.EnsureSuccessStatusCode();
 
         string oidcToken = JsonDocument.Parse(tokenJson).RootElement.GetProperty("value").GetString()
-            ?? throw new InvalidOperationException("GitHub OIDC response did not contain a token value.");
+                        ?? throw new InvalidOperationException("GitHub OIDC response did not contain a token value.");
 
         using var exchangeRequest = new HttpRequestMessage(HttpMethod.Post, "https://www.nuget.org/api/v2/token");
         exchangeRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", oidcToken);
@@ -395,7 +400,7 @@ set -euo pipefail
             Fail($"NuGet OIDC token exchange failed: {(int)exchangeResponse.StatusCode} {exchangeJson}");
 
         string apiKey = JsonDocument.Parse(exchangeJson).RootElement.GetProperty("apiKey").GetString()
-            ?? throw new InvalidOperationException("NuGet token response did not contain apiKey.");
+                     ?? throw new InvalidOperationException("NuGet token response did not contain apiKey.");
 
         return apiKey;
     }
@@ -477,18 +482,18 @@ set -euo pipefail
 
     string GetGitHubRepository() =>
         Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")
-        ?? RunProcessWithOutput("git", "config --get remote.origin.url")
-            .Replace("git@github.com:", string.Empty, StringComparison.Ordinal)
-            .Replace("https://github.com/", string.Empty, StringComparison.Ordinal)
-            .TrimEnd('/', '.')
-            .Replace(".git", string.Empty, StringComparison.Ordinal);
+     ?? RunProcessWithOutput("git", "config --get remote.origin.url")
+       .Replace("git@github.com:", string.Empty, StringComparison.Ordinal)
+       .Replace("https://github.com/", string.Empty, StringComparison.Ordinal)
+       .TrimEnd('/', '.')
+       .Replace(".git", string.Empty, StringComparison.Ordinal);
 
     AbsolutePath GetSinglePackage()
     {
         AbsolutePath[] packages = Directory.GetFiles(PackagesDirectory, "*.nupkg")
-            .Where(x => !x.ToString().EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
-            .Select(x => (AbsolutePath)x)
-            .ToArray();
+                                           .Where(x => !x.ToString().EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+                                           .Select(x => (AbsolutePath)x)
+                                           .ToArray();
         Require(packages.Length == 1, $"Expected one package in {PackagesDirectory}, found {packages.Length}.");
         return packages[0];
     }
@@ -629,8 +634,8 @@ set -euo pipefail
         IProcess process = StartProcess(executable, arguments, RootDirectory, logOutput: false);
         process.WaitForExit();
         return process.ExitCode == 0
-            ? string.Join(Environment.NewLine, process.Output.Select(x => x.Text))
-            : string.Empty;
+                   ? string.Join(Environment.NewLine, process.Output.Select(x => x.Text))
+                   : string.Empty;
     }
 
     void TryRunProcess(string executable, string arguments)
@@ -649,10 +654,4 @@ set -euo pipefail
     }
 
     static string Quote(string value) => $"\"{value.Replace("\"", "\\\"")}\"";
-}
-
-static class AssertionExtensions
-{
-    public static void ShouldEqual(this string actual, string expected, string message) =>
-        _ = actual == expected ? true : throw new InvalidOperationException($"{message} Expected '{expected}', actual '{actual}'.");
 }

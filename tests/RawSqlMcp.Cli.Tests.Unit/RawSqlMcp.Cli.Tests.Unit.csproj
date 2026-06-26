@@ -14,6 +14,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\build\_build.csproj" />
       <ProjectReference Include="..\..\src\RawSqlMcp.Cli\RawSqlMcp.Cli.csproj" />
       <Compile Include="..\..\build\GitHubActionsCredentialCleaner.cs" Link="Build\GitHubActionsCredentialCleaner.cs" />
       <Compile Include="..\..\build\GitHubCliEnvironment.cs" Link="Build\GitHubCliEnvironment.cs" />
