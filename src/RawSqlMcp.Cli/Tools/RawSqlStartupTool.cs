@@ -1,13 +1,12 @@
 using System.ComponentModel;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
-using RawSqlMcp.Cli.Models.Options;
+using RawSqlMcp.Cli.Services;
 
 namespace RawSqlMcp.Cli.Tools;
 
 [McpServerToolType]
-public class RawSqlStartupTool(IOptions<RawSqlOptions> options)
+public class RawSqlStartupTool(IDatabaseConnectionResolver connectionResolver)
 {
     [McpServerTool, Description("Returns the list of available databases.")]
-    public string[] AvailableDatabases() => options.Value.ConnectionStrings.Keys.ToArray();
+    public string[] AvailableDatabases() => connectionResolver.ListNames();
 }
