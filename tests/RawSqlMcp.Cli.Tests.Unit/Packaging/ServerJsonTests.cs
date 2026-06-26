@@ -28,7 +28,7 @@ public class ServerJsonTests
         root.GetProperty("description")
             .GetString()
             .ShouldNotBeNull()
-            .ShouldContain("SQL Server");
+            .ShouldContain("SQLite");
 
         root.GetProperty("version")
             .GetString()
@@ -74,19 +74,34 @@ public class ServerJsonTests
         package.TryGetProperty("environment_variables", out _)
             .ShouldBeFalse();
 
-        JsonElement environmentVariable = package.GetProperty("environmentVariables")[0];
+        JsonElement[] environmentVariables = package.GetProperty("environmentVariables")
+                                                     .EnumerateArray()
+                                                     .ToArray();
 
-        environmentVariable.GetProperty("name")
-            .GetString()
-            .ShouldBe("RawSqlMcp__ConnectionStrings__Default");
+        environmentVariables.Select(variable => variable.GetProperty("name")
+                                                        .GetString())
+                            .ShouldContain("RawSqlMcp__Databases__Default__Provider");
 
-        environmentVariable.GetProperty("isRequired")
-            .GetBoolean()
-            .ShouldBeFalse();
+        environmentVariables.Select(variable => variable.GetProperty("name")
+                                                        .GetString())
+                            .ShouldContain("RawSqlMcp__Databases__Default__ConnectionString");
 
-        environmentVariable.GetProperty("isSecret")
-            .GetBoolean()
-            .ShouldBeTrue();
+        JsonElement legacyEnvironmentVariable = environmentVariables.Single(variable => variable.GetProperty("name")
+                                                                                                .GetString()
+                                                                                == "RawSqlMcp__ConnectionStrings__Default");
+
+        legacyEnvironmentVariable.GetProperty("description")
+                                 .GetString()
+                                 .ShouldNotBeNull()
+                                 .ShouldContain("Obsolete");
+
+        legacyEnvironmentVariable.GetProperty("isRequired")
+                                 .GetBoolean()
+                                 .ShouldBeFalse();
+
+        legacyEnvironmentVariable.GetProperty("isSecret")
+                                 .GetBoolean()
+                                 .ShouldBeTrue();
     }
 
     private static async Task<JsonDocument> LoadServerJsonAsync()

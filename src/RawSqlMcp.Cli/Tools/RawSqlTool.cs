@@ -1,17 +1,23 @@
 using System.ComponentModel;
-using System.Data;
+using System.Data.Common;
 using System.Text.Json.Nodes;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using RawSqlMcp.Cli.Models.Dtos;
 using RawSqlMcp.Cli.Models.Options;
+using RawSqlMcp.Cli.Services;
+using RawSqlMcp.Cli.Services.Schema;
 
 namespace RawSqlMcp.Cli.Tools;
 
 [McpServerToolType]
-public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> logger)
+public class RawSqlTool(
+    IOptions<RawSqlOptions> options,
+    IDatabaseConnectionResolver connectionResolver,
+    DatabaseProviderFactoryRegistry providerFactoryRegistry,
+    DatabaseSchemaReaderRegistry schemaReaderRegistry,
+    ILogger<RawSqlTool> logger)
 {
     [McpServerTool, Description("Returns the schema of the specified database.")]
     public async Task<DatabaseSchemaDto> GetSchemaAsync(
@@ -21,18 +27,14 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
     {
         try
         {
-            if (!options.Value.ConnectionStrings.TryGetValue(databaseName,
-                                                             out string? connectionString))
-                throw new ArgumentException($"Database '{databaseName}' not found.");
+            DatabaseConnectionDefinition definition = connectionResolver.Resolve(databaseName);
+            IDatabaseSchemaReader schemaReader = schemaReaderRegistry.Resolve(definition.Provider);
+            await using DbConnection connection = await OpenConnectionAsync(definition,
+                                                                            cancellationToken);
 
-            await using var connection = new SqlConnection(connectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            DataTable columns = await connection.GetSchemaAsync("Columns",
-                                                                cancellationToken);
-            columns.TableName = connection.Database;
-
-            DatabaseSchemaDto schema = columns;
+            DatabaseSchemaDto schema = await schemaReader.ReadSchemaAsync(connection,
+                                                                          definition.Name,
+                                                                          cancellationToken);
 
             if (!string.IsNullOrWhiteSpace(schemaName))
             {
@@ -65,13 +67,15 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
     {
         try
         {
-            await using SqlCommand command = await CreateSqlCommandAsync(databaseName,
-                                                                         sqlQuery,
-                                                                         cancellationToken);
+            DatabaseConnectionDefinition definition = connectionResolver.Resolve(databaseName);
+            await using DbConnection connection = await OpenConnectionAsync(definition,
+                                                                            cancellationToken);
+            await using DbCommand command = CreateCommand(connection,
+                                                          sqlQuery);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            return await JsonArray(reader);
+            return await JsonArray(reader,
+                                   cancellationToken);
         }
         catch (Exception e)
         {
@@ -92,17 +96,17 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
     {
         try
         {
-            await using SqlCommand command = await CreateSqlCommandAsync(databaseName,
-                                                                         sqlQuery,
-                                                                         cancellationToken);
+            DatabaseConnectionDefinition definition = connectionResolver.Resolve(databaseName);
+            await using DbConnection connection = await OpenConnectionAsync(definition,
+                                                                            cancellationToken);
+            await using DbCommand command = CreateCommand(connection,
+                                                          sqlQuery);
+            AddParameters(command,
+                          parameters);
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
 
-            foreach (var param in parameters)
-                command.Parameters.AddWithValue(param.Key,
-                                                param.Value ?? DBNull.Value);
-
-            await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-
-            return await JsonArray(reader);
+            return await JsonArray(reader,
+                                   cancellationToken);
         }
         catch (Exception e)
         {
@@ -114,7 +118,7 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
 
     [McpServerTool,
      Description(
-         "Executes a parameterized SQL query against the specified database and returns the first column of the first row.")]
+         "Executes a SQL query against the specified database and returns the first column of the first row.")]
     public async Task<string> ExecuteScalarAsync(
         [Description("The name of the database to execute the query against")] string databaseName,
         [Description("The SQL query to execute")] string sqlQuery,
@@ -122,9 +126,11 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
     {
         try
         {
-            await using SqlCommand command = await CreateSqlCommandAsync(databaseName,
-                                                                         sqlQuery,
-                                                                         cancellationToken);
+            DatabaseConnectionDefinition definition = connectionResolver.Resolve(databaseName);
+            await using DbConnection connection = await OpenConnectionAsync(definition,
+                                                                            cancellationToken);
+            await using DbCommand command = CreateCommand(connection,
+                                                          sqlQuery);
 
             object? result = await command.ExecuteScalarAsync(cancellationToken);
             return result?.ToString() ?? string.Empty;
@@ -148,13 +154,13 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
     {
         try
         {
-            await using SqlCommand command = await CreateSqlCommandAsync(databaseName,
-                                                                         sqlQuery,
-                                                                         cancellationToken);
-
-            foreach (var param in parameters)
-                command.Parameters.AddWithValue(param.Key,
-                                                param.Value ?? DBNull.Value);
+            DatabaseConnectionDefinition definition = connectionResolver.Resolve(databaseName);
+            await using DbConnection connection = await OpenConnectionAsync(definition,
+                                                                            cancellationToken);
+            await using DbCommand command = CreateCommand(connection,
+                                                          sqlQuery);
+            AddParameters(command,
+                          parameters);
 
             object? result = await command.ExecuteScalarAsync(cancellationToken);
             return result?.ToString() ?? string.Empty;
@@ -167,47 +173,55 @@ public class RawSqlTool(IOptions<RawSqlOptions> options, ILogger<RawSqlTool> log
         }
     }
 
-    private static async Task<string> JsonArray(SqlDataReader reader)
+    private async Task<DbConnection> OpenConnectionAsync(DatabaseConnectionDefinition definition,
+                                                         CancellationToken cancellationToken)
+    {
+        DbProviderFactory factory = providerFactoryRegistry.Resolve(definition.Provider);
+        DbConnection connection = factory.CreateConnection()
+                                  ?? throw new InvalidOperationException($"Provider '{definition.Provider}' did not create a connection.");
+
+        connection.ConnectionString = definition.ConnectionString;
+        await connection.OpenAsync(cancellationToken);
+        return connection;
+    }
+
+    private DbCommand CreateCommand(DbConnection connection,
+                                    string sqlQuery)
+    {
+        DbCommand command = connection.CreateCommand();
+        command.CommandText = sqlQuery;
+        command.CommandTimeout = options.Value.CommandTimeout ?? RawSqlOptions.DefaultCommandTimeout;
+        return command;
+    }
+
+    private static void AddParameters(DbCommand command,
+                                      Dictionary<string, object?> parameters)
+    {
+        foreach ((string name, object? value) in parameters)
+        {
+            DbParameter parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value ?? DBNull.Value;
+            command.Parameters.Add(parameter);
+        }
+    }
+
+    private static async Task<string> JsonArray(DbDataReader reader,
+                                                CancellationToken cancellationToken)
     {
         List<string> results = [];
-        while (await reader.ReadAsync())
+        while (await reader.ReadAsync(cancellationToken))
         {
             var row = new JsonObject();
             for (int i = 0; i < reader.FieldCount; i++)
-                row[reader.GetName(i)] = await reader.IsDBNullAsync(i) ? null : reader.GetValue(i)?.ToString();
+                row[reader.GetName(i)] = await reader.IsDBNullAsync(i,
+                                                                     cancellationToken)
+                                             ? null
+                                             : reader.GetValue(i)?.ToString();
 
             results.Add(row.ToJsonString());
         }
 
         return $"[{string.Join(',', results)}]";
-    }
-
-    private async Task<SqlCommand> CreateSqlCommandAsync(string databaseName,
-                                                         string sqlQuery,
-                                                         CancellationToken cancellationToken)
-    {
-        SqlCommand? command = null;
-        try
-        {
-            if (!options.Value.ConnectionStrings.TryGetValue(databaseName,
-                                                             out string? connectionString))
-                throw new ArgumentException($"Database '{databaseName}' not found.");
-
-            await using var connection = new SqlConnection(connectionString);
-            await connection.OpenAsync(cancellationToken);
-
-            command = new(sqlQuery,
-                          connection)
-            {
-                CommandTimeout = options.Value.CommandTimeout ?? RawSqlOptions.DefaultCommandTimeout
-            };
-
-            return command;
-        }
-        catch
-        {
-            if (command != null) await command.DisposeAsync();
-            throw;
-        }
     }
 }

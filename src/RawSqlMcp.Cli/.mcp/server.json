@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "description": "Execute raw SQL queries against SQL Server and return the results.",
+  "description": "Execute raw SQL queries against SQL Server, SQLite, PostgreSQL, MySQL, and MariaDB, then return the results.",
   "name": "io.github.KifoPL/RawSqlMcp",
   "title": "Raw SQL MCP",
   "version": "0.0.0-placeholder",
@@ -16,8 +16,20 @@
       },
       "environmentVariables": [
         {
+          "name": "RawSqlMcp__Databases__Default__Provider",
+          "description": "Database provider for the named database. Supported values: sqlserver, sqlite, postgres, postgresql, mysql, mariadb.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "RawSqlMcp__Databases__Default__ConnectionString",
+          "description": "Connection string for the named database.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
           "name": "RawSqlMcp__ConnectionStrings__Default",
-          "description": "Define a connection string named 'Default' - you can define multiple connection strings by adding more env vars with the same prefix and different names.",
+          "description": "Obsolete. Use RawSqlMcp__Databases__Default__Provider and RawSqlMcp__Databases__Default__ConnectionString instead. Legacy connection strings are interpreted as SQL Server.",
           "isRequired": false,
           "isSecret": true
         }
