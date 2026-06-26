@@ -28,7 +28,9 @@ public static class ReleaseVersionPlanner
         StableVersion latest = tagSet
             .Select(TryParseStableTag)
             .Where(x => x is not null)
-            .Max() ?? new StableVersion(0, 0, 0);
+            .Cast<StableVersion>()
+            .DefaultIfEmpty(new StableVersion(0, 0, 0))
+            .Max();
 
         string requested = GetRequestedRelease(commitMessage);
         if (string.Equals(requested, "skip", StringComparison.OrdinalIgnoreCase))
