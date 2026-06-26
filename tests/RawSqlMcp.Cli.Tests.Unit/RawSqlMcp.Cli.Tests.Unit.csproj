@@ -18,6 +18,7 @@
       <ProjectReference Include="..\..\src\RawSqlMcp.Cli\RawSqlMcp.Cli.csproj" />
       <Compile Include="..\..\build\GitHubActionsCredentialCleaner.cs" Link="Build\GitHubActionsCredentialCleaner.cs" />
       <Compile Include="..\..\build\GitHubCliEnvironment.cs" Link="Build\GitHubCliEnvironment.cs" />
+      <Compile Include="..\..\build\CommitMessageLengthGate.cs" Link="Build\CommitMessageLengthGate.cs" />
       <Compile Include="..\..\build\PreCommitChangeDetector.cs" Link="Build\PreCommitChangeDetector.cs" />
       <Compile Include="..\..\build\ReleasePublishingGate.cs" Link="Build\ReleasePublishingGate.cs" />
       <Compile Include="..\..\build\ReleaseVersionPlanner.cs" Link="Build\ReleaseVersionPlanner.cs" />
