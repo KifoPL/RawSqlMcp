@@ -256,13 +256,22 @@ class Build : NukeBuild
     Target PreCommit => _ => _
         .Executes(() =>
         {
+            string status = RunProcessWithOutput("git", "status --porcelain");
+            bool generateVhs = PreCommitChangeDetector.HasChangedTapeFiles(status);
             IReadOnlyDictionary<string, string?> before = SnapshotCandidateHashes();
 
             DotNet("restore RawSqlMcp.slnx");
             DotNet("format RawSqlMcp.slnx");
             DotNet($"build RawSqlMcp.slnx --configuration {Configuration}");
             DotNet($"test --project {UnitTestProject} --configuration {Configuration} --no-build");
-            GenerateVhsGif();
+            if (generateVhs)
+            {
+                GenerateVhsGif();
+            }
+            else
+            {
+                Log.Information("Skipping VHS regeneration because no .tape files changed.");
+            }
 
             StageFormattingAndGifChanges(before);
         });
