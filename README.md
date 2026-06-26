@@ -67,7 +67,8 @@ Optional command timeout, in seconds:
 export RawSqlMcp__CommandTimeout=30
 ```
 
-The legacy `RawSqlMcp__ConnectionStrings__Default="..."` format is obsolete. It still works for compatibility and is interpreted as SQL Server.
+> [!INFO]
+> The legacy `RawSqlMcp__ConnectionStrings__Default="..."` format is obsolete. It still works for compatibility and is interpreted as SQL Server.
 
 ## Usage
 
