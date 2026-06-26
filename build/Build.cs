@@ -46,7 +46,7 @@ class Build : NukeBuild
 {
     const string Configuration = "Release";
     const string PackageId = "RawSqlMcp";
-    const string ServerName = "io.github.kifopl/RawSqlMcp";
+    const string ServerName = "io.github.KifoPL/RawSqlMcp";
     const string NuGetUser = "KifoPL";
     const string NuGetSource = "https://api.nuget.org/v3/index.json";
     const string McpPublisherUrl = "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz";
@@ -68,6 +68,8 @@ class Build : NukeBuild
     AbsolutePath VhsDirectory => RootDirectory / "docs/vhs";
     AbsolutePath InstallRunTape => VhsDirectory / "install-run.tape";
     AbsolutePath InstallRunGif => VhsDirectory / "install-run.gif";
+    AbsolutePath EndToEndTape => VhsDirectory / "end-to-end.tape";
+    AbsolutePath EndToEndGif => VhsDirectory / "end-to-end.gif";
 
     [Parameter, Secret] readonly string? CodecovToken;
     [Parameter, Secret] readonly string? ReleaseTagToken;
@@ -328,7 +330,10 @@ set -euo pipefail
         string.Equals(Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"), "push", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(Environment.GetEnvironmentVariable("GITHUB_REF"), "refs/heads/master", StringComparison.Ordinal);
 
-    bool IsPublishingRelease() => GitHubActions?.Ref.StartsWith("refs/tags/v", StringComparison.Ordinal) == true;
+    bool IsPublishingRelease() =>
+        ReleasePublishingGate.ShouldPublish(
+            Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"),
+            GitHubActions?.Ref);
 
     string GetAuthenticatedGitHubRemote()
     {
@@ -526,7 +531,9 @@ set -euo pipefail
     {
         RequireTool("vhs", "Install VHS from https://github.com/charmbracelet/vhs to regenerate README GIFs.");
         RunProcess("vhs", InstallRunTape);
+        RunProcess("vhs", EndToEndTape);
         Require(File.Exists(InstallRunGif), $"VHS did not create {InstallRunGif}");
+        Require(File.Exists(EndToEndGif), $"VHS did not create {EndToEndGif}");
     }
 
     void StageFormattingAndGifChanges(IReadOnlyDictionary<string, string?> before)

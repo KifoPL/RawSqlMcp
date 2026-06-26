@@ -1,10 +1,15 @@
 # Raw SQL MCP
 
-<!-- mcp-name: io.github.kifopl/RawSqlMcp -->
+[![CI](https://github.com/KifoPL/RawSqlMcp/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/KifoPL/RawSqlMcp/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/RawSqlMcp?label=NuGet)](https://www.nuget.org/packages/RawSqlMcp)
+[![Latest release](https://img.shields.io/github/v/tag/KifoPL/RawSqlMcp?label=release)](https://github.com/KifoPL/RawSqlMcp/tags)
+
+<!-- mcp-name: io.github.KifoPL/RawSqlMcp -->
 
 Raw SQL MCP is a STDIO MCP server for executing raw SQL against SQL Server.
 
-Use it carefully. The server does not protect you from destructive queries, expensive queries, SQL injection, missing pagination, or unsafe data exposure. Always review and approve queries before running them.
+> [!IMPORTANT]
+> Use it carefully. The server does not protect you from destructive queries, expensive queries, SQL injection, missing pagination, or unsafe data exposure. Always review and approve queries before running them.
 
 ![Install and run demo](docs/vhs/install-run.gif)
 
@@ -19,8 +24,10 @@ dnx RawSqlMcp
 For a specific version:
 
 ```bash
-dnx RawSqlMcp@1.0.0
+dnx RawSqlMcp@0.0.2
 ```
+
+Package: [RawSqlMcp on NuGet](https://www.nuget.org/packages/RawSqlMcp)
 
 ## Configuration
 
@@ -63,3 +70,5 @@ Register the server in an MCP client as a STDIO server:
 ```
 
 The server exposes tools for listing configured database names, reading SQL Server schema metadata, and executing raw, parameterized, and scalar SQL queries.
+
+![Short end-to-end demo](docs/vhs/end-to-end.gif)

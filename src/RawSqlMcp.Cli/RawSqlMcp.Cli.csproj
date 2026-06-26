@@ -11,8 +11,8 @@
         <Company>KifoPL</Company>
         <Description>A simple STDIO MCP server that executes raw SQL queries against SQL Server. Use at your own risk. Always manually approve queries.</Description>
         <PackageTags>mcp;model-context-protocol;sql;raw-sql;sql-mcp;ai;dnx;community</PackageTags>
-        <PackageProjectUrl>https://github.com/kifopl/RawSqlMcp</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/kifopl/RawSqlMcp</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/KifoPL/RawSqlMcp</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/KifoPL/RawSqlMcp</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>

@@ -6,18 +6,14 @@ Set Width 1200
 Set Height 720
 Set Padding 24
 
-Type "dotnet build src/RawSqlMcp.Cli/RawSqlMcp.Cli.csproj -c Release"
+Type "dnx RawSqlMcp@0.0.2 -y --help"
 Enter
-Sleep 1s
+Sleep 2s
 
 Type "export RawSqlMcp__ConnectionStrings__Default='Server=localhost,1433;Database=master;User Id=sa;Password=Your_password123;TrustServerCertificate=True'"
 Enter
 Sleep 500ms
 
-Type "echo 'Recommended package command: dnx RawSqlMcp'"
+Type "timeout 5s dnx RawSqlMcp@0.0.2 -y || true"
 Enter
-Sleep 500ms
-
-Type "src/RawSqlMcp.Cli/bin/Release/net10.0/RawSqlMcp.Cli & pid=$!; sleep 3; kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true"
-Enter
-Sleep 3s
+Sleep 6s
