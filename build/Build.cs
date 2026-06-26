@@ -245,7 +245,8 @@ class Build : NukeBuild
             RunProcess("git", "config user.name \"github-actions[bot]\"");
             RunProcess("git", "config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"");
             RunProcess("git", $"tag {Quote(plan.Tag!)} -m {Quote($"Release {plan.Version}")}");
-            RunProcess("git", $"push {Quote(GetAuthenticatedGitHubRemote())} {Quote(plan.Tag!)}");
+            ClearPersistedGitHubCheckoutCredentials();
+            RunProcess("git", $"-c http.https://github.com/.extraheader= push {Quote(GetAuthenticatedGitHubRemote())} {Quote(plan.Tag!)}");
             Log.Information("Created release tag {Tag}; tag-triggered release workflow will publish package version {Version}.", plan.Tag, plan.Version);
         });
 
@@ -338,6 +339,15 @@ set -euo pipefail
                 .TrimEnd('/');
 
         return $"https://x-access-token:{ReleaseTagToken}@github.com/{repository}.git";
+    }
+
+    void ClearPersistedGitHubCheckoutCredentials()
+    {
+        TryRunProcess("git", "config --local --unset-all http.https://github.com/.extraheader");
+
+        string configNames = RunProcessWithOutputOrEmpty("git", "config --local --name-only --get-regexp ^includeIf\\.gitdir:");
+        foreach (string key in GitHubActionsCredentialCleaner.GetCheckoutCredentialKeysToUnset(configNames))
+            TryRunProcess("git", $"config --local --unset-all {Quote(key)}");
     }
 
     void EnsureTagIsReachableFromMaster()
@@ -590,6 +600,21 @@ set -euo pipefail
         IProcess process = StartProcess(executable, arguments, RootDirectory, logOutput: false);
         process.AssertZeroExitCode();
         return string.Join(Environment.NewLine, process.Output.Select(x => x.Text));
+    }
+
+    string RunProcessWithOutputOrEmpty(string executable, string arguments)
+    {
+        IProcess process = StartProcess(executable, arguments, RootDirectory, logOutput: false);
+        process.WaitForExit();
+        return process.ExitCode == 0
+            ? string.Join(Environment.NewLine, process.Output.Select(x => x.Text))
+            : string.Empty;
+    }
+
+    void TryRunProcess(string executable, string arguments)
+    {
+        IProcess process = StartProcess(executable, arguments, RootDirectory, logOutput: false);
+        process.WaitForExit();
     }
 
     static void ChmodExecutable(string path)
