@@ -459,14 +459,29 @@ set -euo pipefail
     void CreateGitHubRelease(string tag, string version)
     {
         RequireTool("gh", "GitHub CLI is required to create releases on GitHub Actions runners.");
-        var env = new Dictionary<string, string?>
+        IReadOnlyDictionary<string, string> env = GitHubCliEnvironment.CreateForCurrentProcess();
+        Require(env.ContainsKey("GH_TOKEN"), "GITHUB_TOKEN or GH_TOKEN is required to create GitHub releases.");
+
+        string repository = GetGitHubRepository();
+        IProcess existingRelease = StartProcess("gh", $"release view {Quote(tag)} --repo {Quote(repository)} --json url", RootDirectory, environmentVariables: env, logOutput: false);
+        existingRelease.WaitForExit();
+        if (existingRelease.ExitCode == 0)
         {
-            ["GH_TOKEN"] = Environment.GetEnvironmentVariable("GITHUB_TOKEN")
-        }.Where(x => !string.IsNullOrWhiteSpace(x.Value)).ToDictionary(x => x.Key, x => x.Value!);
+            Log.Information("GitHub release {Tag} already exists; skipping release creation.", tag);
+            return;
+        }
 
         string prerelease = version.Contains('-', StringComparison.Ordinal) ? "--prerelease" : string.Empty;
-        RunProcess("gh", $"release create {tag} --generate-notes {prerelease}", env);
+        RunProcess("gh", $"release create {Quote(tag)} --repo {Quote(repository)} --verify-tag --generate-notes {prerelease}", env);
     }
+
+    string GetGitHubRepository() =>
+        Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")
+        ?? RunProcessWithOutput("git", "config --get remote.origin.url")
+            .Replace("git@github.com:", string.Empty, StringComparison.Ordinal)
+            .Replace("https://github.com/", string.Empty, StringComparison.Ordinal)
+            .TrimEnd('/', '.')
+            .Replace(".git", string.Empty, StringComparison.Ordinal);
 
     AbsolutePath GetSinglePackage()
     {
