@@ -8,6 +8,7 @@ using Nuke.Common.CI;
 using Nuke.Common.CI.GitHubActions;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
+using RawSqlMcp.Build;
 using Serilog;
 using static Nuke.Common.Tooling.ProcessTasks;
 
@@ -23,8 +24,10 @@ using static Nuke.Common.Tooling.ProcessTasks;
     OnWorkflowDispatchOptionalInputs = new[] { "reason" },
     OnPushExcludePaths = new[] { "README.md", "docs/**" },
     OnPullRequestExcludePaths = new[] { "README.md", "docs/**" },
-    InvokedTargets = new[] { nameof(CI) },
-    ImportSecrets = new[] { nameof(CodecovToken) },
+    InvokedTargets = new[] { nameof(Pipeline) },
+    ImportSecrets = new[] { nameof(CodecovToken), nameof(ReleaseTagToken) },
+    EnableGitHubToken = true,
+    WritePermissions = new[] { GitHubActionsPermissions.Contents },
     PublishArtifacts = true,
     CacheKeyFiles = new[] { "global.json", "Directory.Packages.props", "**/*.csproj" })]
 [GitHubActions(
@@ -67,6 +70,7 @@ class Build : NukeBuild
     AbsolutePath InstallRunGif => VhsDirectory / "install-run.gif";
 
     [Parameter, Secret] readonly string? CodecovToken;
+    [Parameter, Secret] readonly string? ReleaseTagToken;
 
     GitHubActions? GitHubActions => GitHubActions.Instance;
 
@@ -211,6 +215,40 @@ class Build : NukeBuild
     Target CI => _ => _
         .DependsOn(ValidateServerJson, UnitTests, Coverage, InspectPackage, UploadCoverage);
 
+    Target Pipeline => _ => _
+        .DependsOn(CI, CreateVersionTag);
+
+    Target CreateVersionTag => _ => _
+        .DependsOn(CI)
+        .OnlyWhenDynamic(IsMasterPush)
+        .Executes(() =>
+        {
+            // Merge commits can override the default patch bump with [release: major|minor|patch|skip|x.y.z[-pre]].
+            RunProcess("git", "fetch origin --tags");
+
+            string tags = RunProcessWithOutput("git", "tag --list v*");
+            string message = RunProcessWithOutput("git", "log -1 --pretty=%B");
+            ReleaseVersionPlan plan = ReleaseVersionPlanner.Plan(
+                tags.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                message);
+
+            if (!plan.ShouldCreateTag)
+            {
+                Log.Information("{Reason}", plan.Reason);
+                return;
+            }
+
+            Require(!string.IsNullOrWhiteSpace(plan.Tag), "Release version planner did not return a tag.");
+            Require(!string.IsNullOrWhiteSpace(plan.Version), "Release version planner did not return a version.");
+            Require(!string.IsNullOrWhiteSpace(ReleaseTagToken), "RELEASE_TAG_TOKEN is required to push tags that trigger the release workflow.");
+
+            RunProcess("git", "config user.name \"github-actions[bot]\"");
+            RunProcess("git", "config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"");
+            RunProcess("git", $"tag {Quote(plan.Tag!)} -m {Quote($"Release {plan.Version}")}");
+            RunProcess("git", $"push {Quote(GetAuthenticatedGitHubRemote())} {Quote(plan.Tag!)}");
+            Log.Information("Created release tag {Tag}; tag-triggered release workflow will publish package version {Version}.", plan.Tag, plan.Version);
+        });
+
     Target GenerateVhs => _ => _
         .DependsOn(BuildSolution)
         .Executes(GenerateVhsGif);
@@ -218,13 +256,22 @@ class Build : NukeBuild
     Target PreCommit => _ => _
         .Executes(() =>
         {
+            string status = RunProcessWithOutput("git", "status --porcelain");
+            bool generateVhs = PreCommitChangeDetector.HasChangedTapeFiles(status);
             IReadOnlyDictionary<string, string?> before = SnapshotCandidateHashes();
 
             DotNet("restore RawSqlMcp.slnx");
             DotNet("format RawSqlMcp.slnx");
             DotNet($"build RawSqlMcp.slnx --configuration {Configuration}");
             DotNet($"test --project {UnitTestProject} --configuration {Configuration} --no-build");
-            GenerateVhsGif();
+            if (generateVhs)
+            {
+                GenerateVhsGif();
+            }
+            else
+            {
+                Log.Information("Skipping VHS regeneration because no .tape files changed.");
+            }
 
             StageFormattingAndGifChanges(before);
         });
@@ -276,7 +323,22 @@ set -euo pipefail
         Log.Information("Release dry run completed for {PackageId} {Version}; no publishing was performed.", PackageId, version);
     }
 
+    static bool IsMasterPush() =>
+        string.Equals(Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"), "push", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(Environment.GetEnvironmentVariable("GITHUB_REF"), "refs/heads/master", StringComparison.Ordinal);
+
     bool IsPublishingRelease() => GitHubActions?.Ref.StartsWith("refs/tags/v", StringComparison.Ordinal) == true;
+
+    string GetAuthenticatedGitHubRemote()
+    {
+        string repository = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")
+            ?? RunProcessWithOutput("git", "config --get remote.origin.url")
+                .Replace("git@github.com:", string.Empty, StringComparison.Ordinal)
+                .Replace("https://github.com/", string.Empty, StringComparison.Ordinal)
+                .TrimEnd('/');
+
+        return $"https://x-access-token:{ReleaseTagToken}@github.com/{repository}.git";
+    }
 
     void EnsureTagIsReachableFromMaster()
     {

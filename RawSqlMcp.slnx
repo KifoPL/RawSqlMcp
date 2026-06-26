@@ -5,4 +5,5 @@
   <Folder Name="/tests/">
     <Project Path="tests/RawSqlMcp.Cli.Tests.Unit/RawSqlMcp.Cli.Tests.Unit.csproj" />
   </Folder>
+  <Project Path="build/_build.csproj" />
 </Solution>
