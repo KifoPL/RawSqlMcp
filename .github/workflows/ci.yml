@@ -45,11 +45,11 @@ jobs:
     name: ubuntu-latest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: 'Cache: .nuke/temp, ~/.nuget/packages'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .nuke/temp
@@ -63,12 +63,12 @@ jobs:
           ReleaseTagToken: ${{ secrets.RELEASE_TAG_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: 'Publish: packages'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: packages
           path: artifacts/packages
       - name: 'Publish: coverage.cobertura.xml'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: coverage.cobertura.xml
           path: artifacts/coverage/coverage.cobertura.xml
