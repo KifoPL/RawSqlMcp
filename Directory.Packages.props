@@ -5,18 +5,18 @@
   <ItemGroup>
     <PackageVersion Include="Imposter" Version="0.1.9" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageVersion Include="MinVer" Version="7.0.0" />
-    <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.0.0" />
     <PackageVersion Include="MySqlConnector" Version="2.6.1" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Nuke.Common" Version="10.1.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <PackageVersion Include="Testcontainers.MariaDb" Version="4.12.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.12.0" />
-    <PackageVersion Include="Testcontainers.MySql" Version="4.12.0" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.12.0" />
-    <PackageVersion Include="TUnit" Version="1.56.35" />
+    <PackageVersion Include="Testcontainers.MariaDb" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <PackageVersion Include="TUnit" Version="1.63.0" />
   </ItemGroup>
 </Project>
