@@ -3,7 +3,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RawSqlMcp.Cli.Models.Options;
 using RawSqlMcp.Cli.Services;
-using RawSqlMcp.Cli.Services.Schema;
 using RawSqlMcp.Cli.Tools;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
@@ -12,7 +11,7 @@ builder.Logging.AddConsole(consoleLogOptions => { consoleLogOptions.LogToStandar
 var jsonOptions = RawSqlMcp.Cli.Models.RawSqlJsonContext.Default.Options;
 
 builder.Services.AddOptions<RawSqlOptions>().BindConfiguration(RawSqlOptions.Key)
-       .Validate(options =>
+       .Validate<DatabaseProviderRegistry>((options, providerRegistry) =>
        {
 #pragma warning disable CS0618 // Type or member is obsolete
            foreach (var (name, connectionString) in options.ConnectionStrings)
@@ -30,6 +29,7 @@ builder.Services.AddOptions<RawSqlOptions>().BindConfiguration(RawSqlOptions.Key
                {
                    throw new InvalidOperationException($"Database '{name}' is missing a provider. Specify it using the configuration key '{RawSqlOptions.Key}__Databases__{name}__Provider'.");
                }
+               providerRegistry.Resolve(database.Provider);
                if (string.IsNullOrWhiteSpace(database.ConnectionString))
                {
                    throw new InvalidOperationException($"Database '{name}' is missing a connection string. Specify it using the configuration key '{RawSqlOptions.Key}__Databases__{name}__ConnectionString'.");
@@ -39,8 +39,7 @@ builder.Services.AddOptions<RawSqlOptions>().BindConfiguration(RawSqlOptions.Key
        }, "All databases must have a provider and connection string.")
       .ValidateOnStart();
 builder.Services.AddSingleton<IDatabaseConnectionResolver, DatabaseConnectionResolver>();
-builder.Services.AddSingleton(DatabaseProviderFactoryRegistry.CreateDefault());
-builder.Services.AddSingleton(DatabaseSchemaReaderRegistry.CreateDefault());
+builder.Services.AddSingleton(DatabaseProviderRegistry.CreateDefault());
 
 builder.Services.AddMcpServer()
        .WithStdioServerTransport()

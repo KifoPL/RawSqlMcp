@@ -8,12 +8,12 @@ public sealed class SqliteSchemaReader : IDatabaseSchemaReader
     public async Task<DatabaseSchemaDto> ReadSchemaAsync(
         DbConnection connection,
         string databaseName,
+        string? schemaName,
         CancellationToken cancellationToken)
     {
         await using DbCommand command = connection.CreateCommand();
         command.CommandText = """
             select
-                @databaseName as DatabaseName,
                 'main' as SchemaName,
                 m.name as TableName,
                 m.type as TableType,
@@ -34,16 +34,13 @@ public sealed class SqliteSchemaReader : IDatabaseSchemaReader
             where m.type in ('table', 'view')
               and m.name not like 'sqlite_%'
               and p.hidden = 0
+              and lower(coalesce(@schemaName, 'main')) = 'main'
             order by m.name, p.cid;
             """;
 
-        DbParameter parameter = command.CreateParameter();
-        parameter.ParameterName = "@databaseName";
-        parameter.Value = databaseName;
-        command.Parameters.Add(parameter);
-
         return DatabaseSchemaBuilder.Build(databaseName,
                                            await SchemaColumnReader.ReadRowsAsync(command,
+                                                                                  schemaName,
                                                                                   cancellationToken));
     }
 }

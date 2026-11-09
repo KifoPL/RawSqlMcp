@@ -19,6 +19,7 @@ public sealed class MariaDbIntegrationDatabase : IIntegrationDatabase
         => ExecuteNonQueryAsync("""
                                 create table widgets (id int not null primary key, name varchar(100) not null);
                                 insert into widgets (id, name) values (1, 'alpha'), (2, 'beta');
+                                create table widget_parts (widget_id int not null, part_no int not null, label varchar(100) null unique, primary key (part_no, widget_id), foreign key (widget_id) references widgets (id));
                                 """);
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();

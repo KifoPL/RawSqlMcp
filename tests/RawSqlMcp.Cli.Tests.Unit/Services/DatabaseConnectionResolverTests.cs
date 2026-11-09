@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using RawSqlMcp.Cli.Models.Options;
 using RawSqlMcp.Cli.Services;
@@ -79,6 +80,26 @@ public class DatabaseConnectionResolverTests
         var resolver = new DatabaseConnectionResolver(options);
 
         resolver.ListNames().ShouldBe(["Default", "Reporting"]);
+    }
+
+    [Test]
+    public void Resolve_FindsBoundDatabasesCaseInsensitively()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+                                      .AddInMemoryCollection(new Dictionary<string, string?>
+                                      {
+                                          ["RawSqlMcp:Databases:Local:Provider"] = "sqlite",
+                                          ["RawSqlMcp:Databases:Local:ConnectionString"] = "Data Source=:memory:",
+                                          ["RawSqlMcp:ConnectionStrings:Legacy"] = "Server=legacy"
+                                      })
+                                      .Build();
+        var boundOptions = new RawSqlOptions();
+        configuration.GetSection(RawSqlOptions.Key).Bind(boundOptions);
+
+        var resolver = new DatabaseConnectionResolver(Options.Create(boundOptions));
+
+        resolver.Resolve("local").Provider.ShouldBe("sqlite");
+        resolver.Resolve("LEGACY").Provider.ShouldBe("sqlserver");
     }
 
     [Test]

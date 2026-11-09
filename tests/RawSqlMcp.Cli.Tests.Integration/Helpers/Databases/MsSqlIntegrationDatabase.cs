@@ -23,6 +23,7 @@ public sealed class MsSqlIntegrationDatabase : IIntegrationDatabase
         => ExecuteNonQueryAsync("""
                                 create table widgets (id int not null primary key, name nvarchar(100) not null);
                                 insert into widgets (id, name) values (1, N'alpha'), (2, N'beta');
+                                create table widget_parts (widget_id int not null, part_no int not null, label nvarchar(100) null unique, primary key (part_no, widget_id), foreign key (widget_id) references widgets (id));
                                 """);
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();

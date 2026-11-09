@@ -9,3 +9,4 @@ artifacts/
 build/bin/
 build/obj/
 .idea/*
+graphify-out/
