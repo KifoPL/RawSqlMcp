@@ -25,4 +25,10 @@ public sealed class RawSqlToolSqlServerIntegrationTests : RawSqlToolIntegrationT
 
     [Test]
     public Task RawSqlTool_ExecutesQueriesAndReadsSchema() => AssertExecuteParametrizedScalarAsync(Database);
+
+    [Test]
+    public Task RawSqlTool_FormatsDecimalsIndependentOfCulture() => AssertCultureInvariantDecimalAsync(Database);
+
+    [Test]
+    public Task RawSqlTool_ReadsSchema() => AssertGetSchemaAsync(Database);
 }

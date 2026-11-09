@@ -23,6 +23,7 @@ public sealed class SqliteIntegrationDatabase : IIntegrationDatabase
         command.CommandText = """
                               create table widgets (id integer primary key, name text not null);
                               insert into widgets (id, name) values (1, 'alpha'), (2, 'beta');
+                              create table widget_parts (widget_id int not null, part_no int not null, label text null unique, primary key (part_no, widget_id), foreign key (widget_id) references widgets (id));
                               """;
         await command.ExecuteNonQueryAsync();
     }

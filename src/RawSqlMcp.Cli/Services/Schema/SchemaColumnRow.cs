@@ -1,7 +1,6 @@
 namespace RawSqlMcp.Cli.Services.Schema;
 
 public sealed record SchemaColumnRow(
-    string DatabaseName,
     string SchemaName,
     string TableName,
     string? TableType,

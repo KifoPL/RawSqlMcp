@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 
@@ -6,16 +7,21 @@ namespace RawSqlMcp.Cli.Services.Schema;
 public static class SchemaColumnReader
 {
     public static async Task<IReadOnlyList<SchemaColumnRow>> ReadRowsAsync(DbCommand command,
+                                                                           string? schemaName,
                                                                            CancellationToken cancellationToken)
     {
+        DbParameter parameter = command.CreateParameter();
+        parameter.ParameterName = "@schemaName";
+        parameter.DbType = DbType.String;
+        parameter.Value = (object?)schemaName ?? DBNull.Value;
+        command.Parameters.Add(parameter);
+
         List<SchemaColumnRow> rows = [];
         await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
 
         while (await reader.ReadAsync(cancellationToken))
         {
             rows.Add(new(
-                         ReadString(reader,
-                                    "DatabaseName"),
                          ReadString(reader,
                                     "SchemaName"),
                          ReadString(reader,

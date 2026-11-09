@@ -8,19 +8,19 @@ public sealed class SqlServerSchemaReader : IDatabaseSchemaReader
     public async Task<DatabaseSchemaDto> ReadSchemaAsync(
         DbConnection connection,
         string databaseName,
+        string? schemaName,
         CancellationToken cancellationToken)
     {
         await using DbCommand command = connection.CreateCommand();
         command.CommandText = """
             select
-                db_name() as DatabaseName,
                 c.TABLE_SCHEMA as SchemaName,
                 c.TABLE_NAME as TableName,
                 t.TABLE_TYPE as TableType,
                 c.COLUMN_NAME as ColumnName,
                 c.DATA_TYPE as DataType,
                 case c.IS_NULLABLE when 'YES' then cast(1 as bit) else cast(0 as bit) end as IsNullable,
-                case when tc.CONSTRAINT_TYPE = 'PRIMARY KEY' then cast(1 as bit) else cast(0 as bit) end as IsPrimaryKey,
+                case when kcu.COLUMN_NAME is null then cast(0 as bit) else cast(1 as bit) end as IsPrimaryKey,
                 c.ORDINAL_POSITION as Ordinal,
                 c.CHARACTER_MAXIMUM_LENGTH as MaxLength,
                 c.CHARACTER_OCTET_LENGTH as OctetLength,
@@ -32,15 +32,17 @@ public sealed class SqlServerSchemaReader : IDatabaseSchemaReader
             from INFORMATION_SCHEMA.COLUMNS c
             join INFORMATION_SCHEMA.TABLES t
               on t.TABLE_SCHEMA = c.TABLE_SCHEMA and t.TABLE_NAME = c.TABLE_NAME
-            left join INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+            left join (INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                join INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+                  on tc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA and tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME and tc.CONSTRAINT_TYPE = 'PRIMARY KEY')
               on kcu.TABLE_SCHEMA = c.TABLE_SCHEMA and kcu.TABLE_NAME = c.TABLE_NAME and kcu.COLUMN_NAME = c.COLUMN_NAME
-            left join INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-              on tc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA and tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME and tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+            where lower(c.TABLE_SCHEMA) = lower(coalesce(@schemaName, c.TABLE_SCHEMA))
             order by c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION;
             """;
 
-        return DatabaseSchemaBuilder.Build(connection.Database,
+        return DatabaseSchemaBuilder.Build(databaseName,
                                            await SchemaColumnReader.ReadRowsAsync(command,
+                                                                                  schemaName,
                                                                                   cancellationToken));
     }
 }

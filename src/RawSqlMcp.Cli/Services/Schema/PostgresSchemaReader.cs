@@ -8,19 +8,19 @@ public sealed class PostgresSchemaReader : IDatabaseSchemaReader
     public async Task<DatabaseSchemaDto> ReadSchemaAsync(
         DbConnection connection,
         string databaseName,
+        string? schemaName,
         CancellationToken cancellationToken)
     {
         await using DbCommand command = connection.CreateCommand();
         command.CommandText = """
             select
-                current_database() as "DatabaseName",
                 c.table_schema as "SchemaName",
                 c.table_name as "TableName",
                 t.table_type as "TableType",
                 c.column_name as "ColumnName",
                 c.data_type as "DataType",
                 (c.is_nullable = 'YES') as "IsNullable",
-                (tc.constraint_type = 'PRIMARY KEY') as "IsPrimaryKey",
+                (kcu.column_name is not null) as "IsPrimaryKey",
                 c.ordinal_position as "Ordinal",
                 c.character_maximum_length as "MaxLength",
                 c.character_octet_length as "OctetLength",
@@ -32,16 +32,18 @@ public sealed class PostgresSchemaReader : IDatabaseSchemaReader
             from information_schema.columns c
             join information_schema.tables t
               on t.table_schema = c.table_schema and t.table_name = c.table_name
-            left join information_schema.key_column_usage kcu
+            left join (information_schema.key_column_usage kcu
+                join information_schema.table_constraints tc
+                  on tc.constraint_schema = kcu.constraint_schema and tc.constraint_name = kcu.constraint_name and tc.table_name = kcu.table_name and tc.constraint_type = 'PRIMARY KEY')
               on kcu.table_schema = c.table_schema and kcu.table_name = c.table_name and kcu.column_name = c.column_name
-            left join information_schema.table_constraints tc
-              on tc.constraint_schema = kcu.constraint_schema and tc.constraint_name = kcu.constraint_name and tc.constraint_type = 'PRIMARY KEY'
             where c.table_schema not in ('pg_catalog', 'information_schema')
+              and lower(c.table_schema) = lower(coalesce(@schemaName, c.table_schema))
             order by c.table_schema, c.table_name, c.ordinal_position;
             """;
 
-        return DatabaseSchemaBuilder.Build(connection.Database,
+        return DatabaseSchemaBuilder.Build(databaseName,
                                            await SchemaColumnReader.ReadRowsAsync(command,
+                                                                                  schemaName,
                                                                                   cancellationToken));
     }
 }

@@ -8,5 +8,6 @@ public interface IDatabaseSchemaReader
     Task<DatabaseSchemaDto> ReadSchemaAsync(
         DbConnection connection,
         string databaseName,
+        string? schemaName,
         CancellationToken cancellationToken);
 }
